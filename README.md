@@ -36,7 +36,17 @@ This project supports financial institutions in:
 ## Next Steps
 - Explore additional resampling techniques to address class imbalance.
 - Apply model interpretability tools like SHAP or LIME to explain predictions.
-- Full project can be provided at request to myself to see full results and work
+- Full project can be provided at request to myself to see full results and work (our XGBoost model performed best and the Random Forest model was the worst performing model)
+
+## Challenges Faced
+- Class imbalance made it difficult for the models to identify minority class samples well
+- Computer memory limitations meant we had to adapt and make changes to models due to large processing times
+- In my case I preferred R over Python but my group worked in Python so I had to adapt
+
+## What I Learned
+- Learned how to better handle imbalanced datasets
+- Learned to recognize when a model was useful or not compared to others (Random Forest wasn't the best in this case)
+- Learned how to work in a team that didn't meet physically and how to work in code amongst said team
 
 ## Repository Structure
 - `data_cleaning.Rmd`: Preprocessing and feature engineering.
