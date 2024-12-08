@@ -51,7 +51,6 @@ This project supports financial institutions in:
 ## Repository Structure
 - `data_cleaning.Rmd`: Preprocessing and feature engineering.
 - `random_forest_modeling.Rmd`: Model building and evaluation.
-- `plots/`: Visualizations of feature importance and ROC curves.
 - `README.md`: Project overview and results.
 
 ## Contact
