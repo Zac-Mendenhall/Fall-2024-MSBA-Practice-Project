@@ -1,10 +1,25 @@
-# Random Forest Model
-## The basic Random Forest Model ended up extremely biased towards the majority class (0), showing high accuracy (91%) but almost no recall for the minority class (1). Out of 4,316 actual positives, it only caught 16, which is quite low. Precision for class 1 was decent at 0.67, but the F1-score was not good (0.01), meaning it wasn’t effective at all in identifying positives. The AUC score came in at 0.71, which shows it had some predictive power, but the ROC curve made it clear that the model struggled to find a balance between true positives and false positives. Overall, the main issue was class imbalance, causing the model to mostly predict the majority class and miss almost all of the positives.
+---
+title: "Random Forest Models for Home Credit Default"
+output: html_document
+---
+
+## Random Forest Models and Class Imbalance
+
+This script evaluates three approaches to using Random Forest models for imbalanced datasets: Basic Random Forest, Weighted Random Forest, and Random Forest with SMOTE.
+
+```r
+# Load required libraries
+library(randomForest)
+library(caret)
+library(pROC)
+library(tidyverse)
+library(mltools)
 
 # Ensure y is a factor for classification
 y_train <- as.factor(y_train)
 y_test <- as.factor(y_test)
 
+# 1. Basic Random Forest Model
 # Train the Random Forest model
 set.seed(42)
 rf_model <- randomForest(x = X_train, y = y_train, ntree = 100, mtry = sqrt(ncol(X_train)), importance = TRUE)
@@ -14,62 +29,45 @@ y_pred <- predict(rf_model, X_test)
 y_pred_proba <- predict(rf_model, X_test, type = "prob")[, 2]
 
 # Evaluate model performance
-# Confusion Matrix
 conf_matrix <- confusionMatrix(y_pred, y_test)
+print("Basic Random Forest - Confusion Matrix:")
 print(conf_matrix)
 
-# Calculate AUC
 roc_curve <- roc(as.numeric(y_test) - 1, as.numeric(y_pred_proba))
 auc_value <- auc(roc_curve)
-print(paste("AUC:", auc_value))
+print(paste("Basic Random Forest - AUC:", auc_value))
 
 # Plot Feature Importance
+print("Basic Random Forest - Feature Importance:")
 varImpPlot(rf_model)
 
-
-
-# Weighted
-## The weighted model is still quite biased towards the majority class (0). It’s got high accuracy (91%), but the recall for the minority class (1) is barely there. Out of 4,316 actual positives, it only picked up 26, so recall for class 1 is still at 0.01. Precision for class 1 was a little better at 0.63, but the F1-score is still very low at 0.01, which just shows how much the model is struggling to catch the positives. The AUC is around 0.70, so there’s some distinction between classes. Even with the class weights adjusted, the main issue is still the large class imbalance. The model mostly sticks to predicting the majority class and misses almost all positives.
-
-# Ensure y is a factor for classification
-y_train <- as.factor(y_train)
-y_test <- as.factor(y_test)
-
+# 2. Random Forest with Weighted Classes
 # Define class weights for imbalanced data
-class_weights <- c("0" = 1, "1" = 70)  # Experiment with higher weights for class 1
+class_weights <- c("0" = 1, "1" = 70)
 
-# Train the Random Forest model with class weights
+# Train the weighted Random Forest model
 set.seed(42)
-rf_model <- randomForest(x = X_train, y = y_train, ntree = 100, mtry = sqrt(ncol(X_train)), 
-                         importance = TRUE, classwt = class_weights)
+rf_model_weighted <- randomForest(x = X_train, y = y_train, ntree = 100, mtry = sqrt(ncol(X_train)), 
+                                  importance = TRUE, classwt = class_weights)
 
 # Predict on the test set
-y_pred <- predict(rf_model, X_test)
-y_pred_proba <- predict(rf_model, X_test, type = "prob")[, 2]
+y_pred_weighted <- predict(rf_model_weighted, X_test)
+y_pred_proba_weighted <- predict(rf_model_weighted, X_test, type = "prob")[, 2]
 
 # Evaluate model performance
-# Confusion Matrix
-conf_matrix <- confusionMatrix(y_pred, y_test)
-print(conf_matrix)
+conf_matrix_weighted <- confusionMatrix(y_pred_weighted, y_test)
+print("Weighted Random Forest - Confusion Matrix:")
+print(conf_matrix_weighted)
 
-# Calculate AUC
-roc_curve <- roc(as.numeric(y_test) - 1, as.numeric(y_pred_proba))
-auc_value <- auc(roc_curve)
-print(paste("AUC:", auc_value))
+roc_curve_weighted <- roc(as.numeric(y_test) - 1, as.numeric(y_pred_proba_weighted))
+auc_value_weighted <- auc(roc_curve_weighted)
+print(paste("Weighted Random Forest - AUC:", auc_value_weighted))
 
 # Plot Feature Importance
-varImpPlot(rf_model)
+print("Weighted Random Forest - Feature Importance:")
+varImpPlot(rf_model_weighted)
 
-
-
-# Random Forest Model using SMOTE
-## The Random Forest model using SMOTE is still very biased towards the majority class (0). It has a high accuracy (91.71%), but it barely picks up on the minority class (1). Sensitivity for the negative class is basically perfect at 0.999, but specificity is practically zero at 0.006, meaning it pretty much fails to find any positives. Positive Predictive Value for class 0 is solid at 0.917, but the Negative Predictive Value is low (0.463), showing the model’s struggle to catch true positives. With a Balanced Accuracy of 0.503, the model is performing almost randomly for class 1, even with SMOTE and class weighting. The AUC of 0.68 confirms there’s only a slight distinction between classes. Overall, this approach didn’t really help improve detection for the minority class.
-```{r, warning=FALSE, message=FALSE}
-
-# Ensure y is a factor for classification
-y_train <- as.factor(y_train)
-y_test <- as.factor(y_test)
-
+# 3. Random Forest with SMOTE
 # Combine X_train and y_train into a single data frame for SMOTE
 train_data <- cbind(X_train, TARGET = y_train)
 
@@ -78,7 +76,7 @@ set.seed(42)
 smote_result <- SMOTE(train_data[,-ncol(train_data)], train_data$TARGET, K = 5, dup_size = 2)
 train_balanced <- smote_result$data
 
-# Convert the SMOTE results to appropriate format
+# Convert SMOTE results to appropriate format
 train_balanced$TARGET <- as.factor(ifelse(train_balanced$class == "1", 1, 0))
 train_balanced <- train_balanced %>% select(-class)
 
@@ -86,28 +84,24 @@ train_balanced <- train_balanced %>% select(-class)
 X_train_balanced <- train_balanced %>% select(-TARGET)
 y_train_balanced <- train_balanced$TARGET
 
-# Define class weights for imbalanced data
-class_weights <- c("0" = 1, "1" = 70)  # Experiment with higher weights for class 1
-
-# Train the Random Forest model with class weights on the SMOTE-balanced data
+# Train the SMOTE-balanced Random Forest model with class weights
 set.seed(42)
-rf_model <- randomForest(x = X_train_balanced, y = y_train_balanced, ntree = 100, 
-                         mtry = sqrt(ncol(X_train_balanced)), importance = TRUE, classwt = class_weights)
+rf_model_smote <- randomForest(x = X_train_balanced, y = y_train_balanced, ntree = 100, 
+                               mtry = sqrt(ncol(X_train_balanced)), importance = TRUE, classwt = class_weights)
 
 # Predict on the test set
-y_pred <- predict(rf_model, X_test)
-y_pred_proba <- predict(rf_model, X_test, type = "prob")[, 2]
+y_pred_smote <- predict(rf_model_smote, X_test)
+y_pred_proba_smote <- predict(rf_model_smote, X_test, type = "prob")[, 2]
 
 # Evaluate model performance
-# Confusion Matrix
-conf_matrix <- confusionMatrix(y_pred, y_test)
-print(conf_matrix)
+conf_matrix_smote <- confusionMatrix(y_pred_smote, y_test)
+print("SMOTE Random Forest - Confusion Matrix:")
+print(conf_matrix_smote)
 
-# Calculate AUC
-roc_curve <- roc(as.numeric(y_test) - 1, as.numeric(y_pred_proba))
-auc_value <- auc(roc_curve)
-print(paste("AUC:", auc_value))
+roc_curve_smote <- roc(as.numeric(y_test) - 1, as.numeric(y_pred_proba_smote))
+auc_value_smote <- auc(roc_curve_smote)
+print(paste("SMOTE Random Forest - AUC:", auc_value_smote))
 
 # Plot Feature Importance
-varImpPlot(rf_model)
-
+print("SMOTE Random Forest - Feature Importance:")
+varImpPlot(rf_model_smote)
