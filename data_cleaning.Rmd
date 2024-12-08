@@ -1,24 +1,30 @@
+---
+title: "Data Cleaning and Preprocessing"
+output: html_document
+---
+
+## Data Cleaning and Preprocessing
+
 # Load required libraries
 library(tidyverse)       # Data manipulation and visualization
 library(rmarkdown)       # Dynamic document creation
 library(dplyr)           # Data manipulation
 library(data.table)      # Efficient data handling
-library(caret)           # Machine learning
+library(caret)           # Machine learning utilities
 library(mltools)         # One-hot encoding
 library(randomForest)    # Random Forest modeling
 library(pROC)            # ROC curve and AUC calculation
 
-# File paths
+# Set working directory and file paths
 train_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/application_train.csv"
 test_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/application_test.csv"
 bureau_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/bureau.csv"
 
-# Load data into train and test sets
+# Import datasets
 train_data <- read.csv(train_data_path, stringsAsFactors = FALSE)
-test_data  <- read.csv(test_data_path, stringsAsFactors = FALSE)
+test_data <- read.csv(test_data_path, stringsAsFactors = FALSE)
 bureau <- read.csv(bureau_data_path, stringsAsFactors = FALSE)
 
-# Data Cleaning
 # Drop irrelevant columns
 columns_to_drop <- c('APARTMENTS_MODE', 'BASEMENTAREA_MODE', 'YEARS_BEGINEXPLUATATION_MODE', 'YEARS_BUILD_MODE',
                      'COMMONAREA_MODE', 'ELEVATORS_MODE', 'ENTRANCES_MODE', 'FLOORSMAX_MODE', 'FLOORSMIN_MODE',
@@ -27,10 +33,21 @@ columns_to_drop <- c('APARTMENTS_MODE', 'BASEMENTAREA_MODE', 'YEARS_BEGINEXPLUAT
                      'YEARS_BUILD_MEDI', 'COMMONAREA_MEDI', 'ELEVATORS_MEDI', 'ENTRANCES_MEDI', 'FLOORSMAX_MEDI', 
                      'FLOORSMIN_MEDI', 'LANDAREA_MEDI', 'LIVINGAPARTMENTS_MEDI', 'LIVINGAREA_MEDI', 
                      'NONLIVINGAPARTMENTS_MEDI', 'NONLIVINGAREA_MEDI')
+
 train_data <- train_data %>% select(-all_of(columns_to_drop))
 test_data <- test_data %>% select(-all_of(columns_to_drop))
 
-# Handle missing values
+# Filter out rows with specific anomalous values
+train_data <- train_data %>%
+  filter(DAYS_EMPLOYED != 365243,
+         OBS_30_CNT_SOCIAL_CIRCLE != 348,
+         DEF_30_CNT_SOCIAL_CIRCLE != 34,
+         OBS_60_CNT_SOCIAL_CIRCLE != 344,
+         DEF_60_CNT_SOCIAL_CIRCLE != 24,
+         AMT_REQ_CREDIT_BUREAU_QRT != 264,
+         AMT_REQ_CREDIT_BUREAU_QRT != 19)
+
+# Impute missing values for numeric columns
 train_data <- train_data %>%
   mutate(AMT_ANNUITY = if_else(is.na(AMT_ANNUITY), mean(AMT_ANNUITY, na.rm = TRUE), AMT_ANNUITY),
          AMT_GOODS_PRICE = if_else(is.na(AMT_GOODS_PRICE), mean(AMT_GOODS_PRICE, na.rm = TRUE), AMT_GOODS_PRICE))
@@ -39,20 +56,67 @@ test_data <- test_data %>%
   mutate(AMT_ANNUITY = if_else(is.na(AMT_ANNUITY), mean(AMT_ANNUITY, na.rm = TRUE), AMT_ANNUITY),
          AMT_GOODS_PRICE = if_else(is.na(AMT_GOODS_PRICE), mean(AMT_GOODS_PRICE, na.rm = TRUE), AMT_GOODS_PRICE))
 
-# Feature Engineering
 # Convert DAYS_BIRTH to age and bin into categories
 age_bins <- c(18, 25, 35, 45, 60, Inf)
 age_labels <- c("18-25", "26-35", "36-45", "46-60", "60+")
 train_data$DAYS_BIRTH <- cut(abs(train_data$DAYS_BIRTH) / 365, breaks = age_bins, labels = age_labels, right = FALSE)
 test_data$DAYS_BIRTH <- cut(abs(test_data$DAYS_BIRTH) / 365, breaks = age_bins, labels = age_labels, right = FALSE)
 
-# Convert categorical variables to numeric
+# Binary encoding for FLAG_OWN_REALTY and FLAG_OWN_CAR
 train_data <- train_data %>%
   mutate(FLAG_OWN_REALTY = if_else(FLAG_OWN_REALTY == "Y", 1, 0),
          FLAG_OWN_CAR = if_else(FLAG_OWN_CAR == "Y", 1, 0))
 
+# Fill missing categorical values
+columns_to_fill <- c("NAME_TYPE_SUITE", "OCCUPATION_TYPE", "FONDKAPREMONT_MODE",
+                     "HOUSETYPE_MODE", "WALLSMATERIAL_MODE", "EMERGENCYSTATE_MODE")
 
+train_data[columns_to_fill] <- lapply(train_data[columns_to_fill], function(x) ifelse(is.na(x), "XNA", x))
 
+# One-hot encoding for categorical variables
+train_data <- train_data %>%
+  mutate(CODE_GENDER = as.factor(CODE_GENDER),
+         NAME_CONTRACT_TYPE = as.factor(NAME_CONTRACT_TYPE))
 
+dummy_vars <- dummyVars(~ CODE_GENDER + NAME_CONTRACT_TYPE, data = train_data)
+train_data_encoded <- predict(dummy_vars, newdata = train_data)
+train_data <- cbind(as.data.frame(train_data), as.data.frame(train_data_encoded))
+train_data <- train_data %>% select(-CODE_GENDER, -NAME_CONTRACT_TYPE)
 
+# Label encode other variables
+train_data <- train_data %>%
+  mutate(CNT_CHILDREN = as.integer(factor(CNT_CHILDREN)),
+         AMT_INCOME_TOTAL = as.integer(factor(AMT_INCOME_TOTAL)),
+         AMT_CREDIT = as.integer(factor(AMT_CREDIT)),
+         DAYS_BIRTH = as.integer(factor(DAYS_BIRTH)),
+         NAME_EDUCATION_TYPE = as.integer(factor(NAME_EDUCATION_TYPE)),
+         WEEKDAY_APPR_PROCESS_START = as.integer(factor(WEEKDAY_APPR_PROCESS_START)))
+
+# Aggregate bureau data
+bureau_agg <- bureau %>%
+  group_by(SK_ID_CURR) %>%
+  summarise(AVG_DAYS_CREDIT = mean(DAYS_CREDIT, na.rm = TRUE),
+            AVG_CREDIT_DAY_OVERDUE = mean(CREDIT_DAY_OVERDUE, na.rm = TRUE),
+            AVG_CNT_CREDIT_PROLONG = mean(CNT_CREDIT_PROLONG, na.rm = TRUE),
+            AVG_AMT_CREDIT_SUM = mean(AMT_CREDIT_SUM, na.rm = TRUE),
+            AVG_AMT_CREDIT_SUM_DEBT = mean(AMT_CREDIT_SUM_DEBT, na.rm = TRUE),
+            AVG_AMT_CREDIT_SUM_OVERDUE = mean(AMT_CREDIT_SUM_OVERDUE, na.rm = TRUE))
+
+train_data <- left_join(train_data, bureau_agg, by = "SK_ID_CURR")
+
+# Impute missing values in numeric columns
+numeric_cols <- sapply(train_data, is.numeric)
+train_data[numeric_cols] <- lapply(train_data[numeric_cols], function(x) ifelse(is.na(x), mean(x, na.rm = TRUE), x))
+
+# Split data into features (X) and target (y)
+X <- train_data %>% select(-TARGET, -SK_ID_CURR)
+y <- train_data$TARGET
+
+# Train-test split (80% train, 20% test)
+set.seed(42)
+train_index <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_index, ]
+X_test <- X[-train_index, ]
+y_train <- y[train_index]
+y_test <- y[-train_index]
 
