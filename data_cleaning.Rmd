@@ -1,0 +1,58 @@
+# Load required libraries
+library(tidyverse)       # Data manipulation and visualization
+library(rmarkdown)       # Dynamic document creation
+library(dplyr)           # Data manipulation
+library(data.table)      # Efficient data handling
+library(caret)           # Machine learning
+library(mltools)         # One-hot encoding
+library(randomForest)    # Random Forest modeling
+library(pROC)            # ROC curve and AUC calculation
+
+# File paths
+train_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/application_train.csv"
+test_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/application_test.csv"
+bureau_data_path <- "C:/Users/Zachary Mendenhall/Desktop/Masters/MSBA Practice Project/Home Credit Default Risk/bureau.csv"
+
+# Load data into train and test sets
+train_data <- read.csv(train_data_path, stringsAsFactors = FALSE)
+test_data  <- read.csv(test_data_path, stringsAsFactors = FALSE)
+bureau <- read.csv(bureau_data_path, stringsAsFactors = FALSE)
+
+# Data Cleaning
+# Drop irrelevant columns
+columns_to_drop <- c('APARTMENTS_MODE', 'BASEMENTAREA_MODE', 'YEARS_BEGINEXPLUATATION_MODE', 'YEARS_BUILD_MODE',
+                     'COMMONAREA_MODE', 'ELEVATORS_MODE', 'ENTRANCES_MODE', 'FLOORSMAX_MODE', 'FLOORSMIN_MODE',
+                     'LANDAREA_MODE', 'LIVINGAPARTMENTS_MODE', 'LIVINGAREA_MODE', 'NONLIVINGAPARTMENTS_MODE', 
+                     'NONLIVINGAREA_MODE', 'APARTMENTS_MEDI', 'BASEMENTAREA_MEDI', 'YEARS_BEGINEXPLUATATION_MEDI', 
+                     'YEARS_BUILD_MEDI', 'COMMONAREA_MEDI', 'ELEVATORS_MEDI', 'ENTRANCES_MEDI', 'FLOORSMAX_MEDI', 
+                     'FLOORSMIN_MEDI', 'LANDAREA_MEDI', 'LIVINGAPARTMENTS_MEDI', 'LIVINGAREA_MEDI', 
+                     'NONLIVINGAPARTMENTS_MEDI', 'NONLIVINGAREA_MEDI')
+train_data <- train_data %>% select(-all_of(columns_to_drop))
+test_data <- test_data %>% select(-all_of(columns_to_drop))
+
+# Handle missing values
+train_data <- train_data %>%
+  mutate(AMT_ANNUITY = if_else(is.na(AMT_ANNUITY), mean(AMT_ANNUITY, na.rm = TRUE), AMT_ANNUITY),
+         AMT_GOODS_PRICE = if_else(is.na(AMT_GOODS_PRICE), mean(AMT_GOODS_PRICE, na.rm = TRUE), AMT_GOODS_PRICE))
+
+test_data <- test_data %>%
+  mutate(AMT_ANNUITY = if_else(is.na(AMT_ANNUITY), mean(AMT_ANNUITY, na.rm = TRUE), AMT_ANNUITY),
+         AMT_GOODS_PRICE = if_else(is.na(AMT_GOODS_PRICE), mean(AMT_GOODS_PRICE, na.rm = TRUE), AMT_GOODS_PRICE))
+
+# Feature Engineering
+# Convert DAYS_BIRTH to age and bin into categories
+age_bins <- c(18, 25, 35, 45, 60, Inf)
+age_labels <- c("18-25", "26-35", "36-45", "46-60", "60+")
+train_data$DAYS_BIRTH <- cut(abs(train_data$DAYS_BIRTH) / 365, breaks = age_bins, labels = age_labels, right = FALSE)
+test_data$DAYS_BIRTH <- cut(abs(test_data$DAYS_BIRTH) / 365, breaks = age_bins, labels = age_labels, right = FALSE)
+
+# Convert categorical variables to numeric
+train_data <- train_data %>%
+  mutate(FLAG_OWN_REALTY = if_else(FLAG_OWN_REALTY == "Y", 1, 0),
+         FLAG_OWN_CAR = if_else(FLAG_OWN_CAR == "Y", 1, 0))
+
+
+
+
+
+
